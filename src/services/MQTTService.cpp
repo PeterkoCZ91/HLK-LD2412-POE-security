@@ -89,6 +89,13 @@ void MQTTService::generateTopics() {
     // System restart diagnostics
     snprintf(_topics.restart_cause,   sizeof(_topics.restart_cause),   "security/%s/system/restart_cause", _deviceId);
     snprintf(_topics.chip_temp,       sizeof(_topics.chip_temp),       "security/%s/system/chip_temp", _deviceId);
+
+    // Supervision heartbeat
+    snprintf(_topics.supervision_alive, sizeof(_topics.supervision_alive), "security/%s/supervision/alive", _deviceId);
+
+    // Multi-sensor mesh
+    snprintf(_topics.mesh_verify_request, sizeof(_topics.mesh_verify_request), "security/%s/mesh/verify_request", _deviceId);
+    snprintf(_topics.mesh_verify_confirm, sizeof(_topics.mesh_verify_confirm), "security/%s/mesh/verify_confirm", _deviceId);
 }
 
 void MQTTService::setupClient() {
@@ -181,6 +188,9 @@ void MQTTService::connect() {
         _mqttClient.subscribe(_topics.cmd_pet_immunity);
         _mqttClient.subscribe(_topics.cmd_dyn_bg);
         _mqttClient.subscribe(_topics.alarm_set);
+        _mqttClient.subscribe("security/+/supervision/alive");
+        _mqttClient.subscribe("security/+/mesh/verify_request");
+        _mqttClient.subscribe("security/+/mesh/verify_confirm");
 
         // Publish IP
         _mqttClient.publish(_topics.ip, ETH.localIP().toString().c_str(), true);

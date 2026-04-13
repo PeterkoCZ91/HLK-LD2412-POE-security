@@ -86,6 +86,13 @@ struct MQTTTopics {
 
     // Chip temperature
     char chip_temp[64];
+
+    // Supervision heartbeat
+    char supervision_alive[64];
+
+    // Multi-sensor mesh
+    char mesh_verify_request[64];
+    char mesh_verify_confirm[64];
 };
 
 class MQTTService {

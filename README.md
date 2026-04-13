@@ -483,7 +483,7 @@ include/
 - MQTT offline buffer limited to ~20 messages (LittleFS constraint)
 - Web UI is a ~50 KB PROGMEM string -- editing requires firmware rebuild
 - Scheduled arm/disarm requires NTP sync (no internet = no schedule)
-- No multi-sensor coordination yet (each node is independent)
+- Multi-sensor supervision heartbeat and mesh alarm verification via MQTT (zero-config, auto-discovery)
 - `resync_count` in diagnostics looks alarming but ~20 resyncs/frame is **normal** parser behavior
 
 </details>
@@ -565,8 +565,8 @@ The PoE variant monitors ESP32 chip temperature. If you receive temperature aler
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| Multi-sensor mesh | :bulb: Planned | Coordinate multiple PoE nodes into building-wide zones via MQTT. Cross-node alarm verification to reduce false positives |
-| Supervision heartbeat | :bulb: Planned | Nodes monitor each other via MQTT — if a node stops reporting, others raise tamper alert (like EOL resistors in wired panels) |
+| Multi-sensor mesh | :white_check_mark: v4.2.0 | Nodes cross-verify alarms via MQTT. On trigger, peers confirm presence within 5s. Alarm event includes `mesh_verified` field |
+| Supervision heartbeat | :white_check_mark: v4.2.0 | Nodes publish alive signal every 60s. If a peer goes silent for 3 min, tamper alert is sent. Auto-discovery of up to 8 peers |
 | Entry/exit path logic | :bulb: Planned | Define valid entry paths (door → hallway → room). Entry delay only on correct sequence; wrong path (e.g. window) = immediate trigger |
 | Event timeline UI | :bulb: Planned | Visual timeline in web dashboard replacing the table view — easier forensic review of detection events |
 | Camera trigger | :bulb: Planned | Snapshot IP camera on alarm event via MQTT/HTTP |
@@ -608,7 +608,7 @@ The alarm keeps running locally. Events are logged to flash (EventLog) and MQTT 
 <details>
 <summary><strong>Can I use multiple PoE sensors?</strong></summary>
 
-Yes. Flash the same firmware to multiple boards — each identifies itself by MAC address (via `known_devices.h`) and gets its own MQTT topics. Add OTA environments per device in `platformio.ini`. Multi-sensor coordination is on the roadmap.
+Yes. Flash the same firmware to multiple boards — each identifies itself by MAC address (via `known_devices.h`) and gets its own MQTT topics. Add OTA environments per device in `platformio.ini`. Since v4.2.0, nodes automatically discover each other via MQTT, monitor peer health (supervision heartbeat), and cross-verify alarms (mesh verification).
 
 </details>
 

@@ -3,6 +3,11 @@
 All notable changes to the POE-2412 Security System firmware are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v4.2.0-poe] - 2026-04-13
+### Added
+- **Supervision heartbeat**: Nodes publish alive signal every 60s via MQTT (`security/<id>/supervision/alive`). If a peer goes silent for 3 minutes, a tamper alert is sent (Telegram/Discord/MQTT). Auto-discovery of up to 8 peers, zero configuration required.
+- **Mesh alarm verification**: On alarm trigger (entry_delay or immediate), the node sends a verify request to all known peers. Peers that also detect presence confirm within 5s. Alarm event JSON includes `mesh_peers`, `mesh_confirmed`, and `mesh_verified` fields for cross-node validation.
+
 ## [v4.1.3-poe] - 2026-04-12
 ### Fixed
 - **HTTP stability**: Replaced abandoned `me-no-dev/AsyncTCP` + `ESPAsyncWebServer` with community-maintained `ESP32Async/*` fork. The old libraries had race conditions in digest auth parser and TCP close handling, causing alternating 200/401/empty-reply responses under repeated requests (worse on Ethernet due to ESP-IDF `tcpip_thread`). API drop-in compatible.

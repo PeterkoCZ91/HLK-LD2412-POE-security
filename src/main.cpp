@@ -40,7 +40,7 @@
 // -------------------------------------------------------------------------
 #ifndef FW_VERSION
 #include <Update.h>
-#define FW_VERSION "v4.1.3-poe"
+#define FW_VERSION "v4.2.0-poe"
 #endif
 #define WDT_TIMEOUT_SECONDS 60
 
@@ -89,6 +89,70 @@ BluetoothService btService;
 #endif
 TaskHandle_t radarTaskHandle = nullptr;
 String g_prevRestartCause = "none";
+
+// -------------------------------------------------------------------------
+// Supervision Heartbeat — peer monitoring
+// -------------------------------------------------------------------------
+struct SupervisionPeer {
+    char id[32];
+    unsigned long lastSeen;  // millis()
+    bool alerted;            // tamper alert already sent for this peer
+};
+static constexpr uint8_t MAX_PEERS = 8;
+static SupervisionPeer peers[MAX_PEERS];
+static uint8_t peerCount = 0;
+static unsigned long lastSupervisionPublish = 0;
+static constexpr unsigned long SUPERVISION_INTERVAL_MS = 60000;   // Publish every 60s
+static constexpr unsigned long SUPERVISION_TIMEOUT_MS  = 180000;  // Alert after 3x interval (3 min)
+static const char* g_myDeviceId = nullptr; // Set in setup() after configManager init
+
+// -------------------------------------------------------------------------
+// Multi-sensor mesh — cross-node alarm verification
+// -------------------------------------------------------------------------
+static bool meshVerifyPending = false;        // We sent a verify request, awaiting confirms
+static unsigned long meshVerifyRequestTime = 0;
+static uint8_t meshConfirmCount = 0;
+static constexpr unsigned long MESH_VERIFY_TIMEOUT_MS = 5000; // 5s window for peer confirms
+
+void supervisionPeerSeen(const char* peerId) {
+    if (g_myDeviceId && strcmp(peerId, g_myDeviceId) == 0) return;
+
+    unsigned long now = millis();
+    for (uint8_t i = 0; i < peerCount; i++) {
+        if (strcmp(peers[i].id, peerId) == 0) {
+            if (peers[i].alerted) {
+                DBG("SUPV", "Peer '%s' back online", peerId);
+                peers[i].alerted = false;
+            }
+            peers[i].lastSeen = now;
+            return;
+        }
+    }
+    if (peerCount < MAX_PEERS) {
+        strncpy(peers[peerCount].id, peerId, sizeof(peers[peerCount].id) - 1);
+        peers[peerCount].id[sizeof(peers[peerCount].id) - 1] = '\0';
+        peers[peerCount].lastSeen = now;
+        peers[peerCount].alerted = false;
+        peerCount++;
+        DBG("SUPV", "New peer discovered: '%s' (total: %d)", peerId, peerCount);
+    }
+}
+
+void supervisionCheck() {
+    unsigned long now = millis();
+    for (uint8_t i = 0; i < peerCount; i++) {
+        if (!peers[i].alerted && now - peers[i].lastSeen > SUPERVISION_TIMEOUT_MS) {
+            peers[i].alerted = true;
+            DBG("SUPV", "PEER OFFLINE: '%s' (no heartbeat for %lus)", peers[i].id, (now - peers[i].lastSeen) / 1000);
+            String msg = "SUPERVISION: Node '" + String(peers[i].id) + "' offline!";
+            String details = "No heartbeat for " + String((now - peers[i].lastSeen) / 1000) + "s. Possible tamper or failure.";
+            notificationService.sendAlert(NotificationType::TAMPER_ALERT, msg, details);
+            if (mqttService.connected()) {
+                mqttService.publish(mqttService.getTopics().tamper, "peer_offline", false);
+            }
+        }
+    }
+}
 
 // -------------------------------------------------------------------------
 // Config
@@ -614,6 +678,7 @@ void setup() {
 #endif
 
     // Init services
+    g_myDeviceId = configManager.getConfig().mqtt_id; // For supervision heartbeat
     if (configManager.getConfig().mqtt_enabled) {
         mqttService.begin(&preferences, configManager.getConfig().mqtt_id, FW_VERSION);
         mqttService.setCommandCallback([](const char* topic, const char* payload) {
@@ -657,6 +722,35 @@ void setup() {
                 String cmd = String(payload);
                 if (cmd == "ARM_AWAY") securityMonitor.setArmed(true, false);
                 else if (cmd == "DISARM") securityMonitor.setArmed(false);
+            } else if (strstr(topic, "/supervision/alive") != nullptr) {
+                // Extract peer ID from topic: security/<id>/supervision/alive
+                const char* start = topic + 9; // skip "security/"
+                const char* end = strstr(start, "/supervision");
+                if (end && end - start < 32) {
+                    char peerId[32];
+                    size_t len = end - start;
+                    memcpy(peerId, start, len);
+                    peerId[len] = '\0';
+                    supervisionPeerSeen(peerId);
+                }
+            } else if (strstr(topic, "/mesh/verify_request") != nullptr) {
+                // Another node is asking for alarm verification — if we also see presence, confirm
+                auto d = radar.getData();
+                if (d.distance_cm > 0 && (d.moving_energy > 0 || d.static_energy > 0)) {
+                    char confirmTopic[96];
+                    snprintf(confirmTopic, sizeof(confirmTopic), "security/%s/mesh/verify_confirm", g_myDeviceId);
+                    char confirmPayload[64];
+                    snprintf(confirmPayload, sizeof(confirmPayload), "{\"dist\":%d,\"mov\":%d,\"stat\":%d}",
+                        d.distance_cm, d.moving_energy, d.static_energy);
+                    mqttService.publish(confirmTopic, confirmPayload, false);
+                    DBG("MESH", "Confirmed verify request (dist=%d)", d.distance_cm);
+                }
+            } else if (strstr(topic, "/mesh/verify_confirm") != nullptr) {
+                // A peer confirmed our alarm — count it
+                if (meshVerifyPending) {
+                    meshConfirmCount++;
+                    DBG("MESH", "Received verify confirm #%d", meshConfirmCount);
+                }
             }
         });
     } else {
@@ -1165,6 +1259,14 @@ void loop() {
                     evtDoc["motion_type"] = evt.motion_type;
                     evtDoc["uptime_s"]    = evt.uptime_s;
                     if (evt.iso_time[0]) evtDoc["time"] = evt.iso_time;
+
+                    // Mesh: include verification status
+                    if (peerCount > 0) {
+                        evtDoc["mesh_peers"]     = peerCount;
+                        evtDoc["mesh_confirmed"] = meshConfirmCount;
+                        evtDoc["mesh_verified"]  = (meshConfirmCount > 0);
+                    }
+
                     String evtJson;
                     serializeJson(evtDoc, evtJson);
                     if (mqttService.publish(topics.alarm_event, evtJson.c_str(), false)) {
@@ -1172,6 +1274,25 @@ void loop() {
                     } else {
                         break; // Retry next loop iteration
                     }
+
+                    // Mesh: send verify request to peers on entry_delay or immediate events
+                    if (peerCount > 0 && (strcmp(evt.reason, "entry_delay") == 0 || strcmp(evt.reason, "immediate") == 0)) {
+                        meshVerifyPending = true;
+                        meshVerifyRequestTime = now;
+                        meshConfirmCount = 0;
+                        mqttService.publish(topics.mesh_verify_request, evtJson.c_str(), false);
+                        DBG("MESH", "Verify request sent to %d peers", peerCount);
+                    }
+                }
+            }
+
+            // Mesh: check verify timeout — log result
+            if (meshVerifyPending && now - meshVerifyRequestTime > MESH_VERIFY_TIMEOUT_MS) {
+                meshVerifyPending = false;
+                if (meshConfirmCount > 0) {
+                    DBG("MESH", "Alarm VERIFIED by %d peer(s)", meshConfirmCount);
+                } else {
+                    DBG("MESH", "Alarm UNVERIFIED (no peers confirmed within %lus)", MESH_VERIFY_TIMEOUT_MS / 1000);
                 }
             }
         }
@@ -1355,6 +1476,13 @@ void loop() {
                     lastPub.gate_stat[i] = statCopy[i];
                 }
             }
+        }
+
+        // --- Supervision heartbeat: publish alive + check peers ---
+        if (now - lastSupervisionPublish > SUPERVISION_INTERVAL_MS) {
+            lastSupervisionPublish = now;
+            mqttService.publish(topics.supervision_alive, "1", false);
+            supervisionCheck();
         }
     } // end mqtt_enabled
 
