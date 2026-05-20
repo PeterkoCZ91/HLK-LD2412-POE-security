@@ -720,7 +720,8 @@ void setup() {
                 radar.startCalibration();
             } else if (strcmp(topic, t.alarm_set) == 0) {
                 String cmd = String(payload);
-                if (cmd == "ARM_AWAY") securityMonitor.setArmed(true, false);
+                if (cmd == "ARM_AWAY")  securityMonitor.setArmed(true, false, false);
+                else if (cmd == "ARM_HOME") securityMonitor.setArmed(true, false, true);
                 else if (cmd == "DISARM") securityMonitor.setArmed(false);
             } else if (strstr(topic, "/supervision/alive") != nullptr) {
                 // Extract peer ID from topic: security/<id>/supervision/alive
@@ -803,7 +804,8 @@ void setup() {
     securityMonitor.setAlarmEnergyThreshold(preferences.getUChar("sec_alarm_en", DEFAULT_ALARM_ENERGY_THRESHOLD));
     securityMonitor.setSirenPin(SIREN_PIN);
     if (preferences.getBool("sec_armed", false)) {
-        securityMonitor.setArmed(true, false);
+        bool restoredHomeMode = preferences.getBool("sec_home_mode", false);
+        securityMonitor.setArmed(true, false, restoredHomeMode);
     }
 
 #ifndef LITE_BUILD

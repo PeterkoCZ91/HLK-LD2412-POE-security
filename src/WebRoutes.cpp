@@ -493,11 +493,17 @@ void setupConfigRoutes() {
         doc["led_start"] = _deps.config->startup_led_sec;
         doc["hold_time"] = _deps.radar->getHoldTime();
         doc["pet_immunity"] = _deps.radar->getMinMoveEnergy();
+        // POE-specific keys
+        doc["chip_temp_interval"] = _deps.config->chip_temp_interval;
+        doc["static_ip"] = String(_deps.config->static_ip);
+        doc["static_gw"] = String(_deps.config->static_gw);
+        doc["static_mask"] = String(_deps.config->static_mask);
+        doc["static_dns"] = String(_deps.config->static_dns);
         if (_deps.zonesMutex && xSemaphoreTake(*_deps.zonesMutex, pdMS_TO_TICKS(100)) == pdTRUE) {
             doc["zones"] = *_deps.zonesJson;
             xSemaphoreGive(*_deps.zonesMutex);
         }
-        
+
         String response;
         serializeJson(doc, response);
         request->send(200, "application/json", response);
@@ -518,16 +524,24 @@ void setupConfigRoutes() {
                     return;
                 }
 
-                if (doc["mqtt_server"].is<String>()) _deps.preferences->putString("mqtt_server", doc["mqtt_server"].as<String>());
-                if (doc["mqtt_port"].is<String>()) _deps.preferences->putString("mqtt_port", doc["mqtt_port"].as<String>());
-                if (doc["mqtt_user"].is<String>() && doc["mqtt_user"].as<String>() != "***") _deps.preferences->putString("mqtt_user", doc["mqtt_user"].as<String>());
-                if (doc["mqtt_pass"].is<String>() && doc["mqtt_pass"].as<String>() != "***") _deps.preferences->putString("mqtt_pass", doc["mqtt_pass"].as<String>());
-                if (doc["mqtt_id"].is<String>()) _deps.preferences->putString("mqtt_id", doc["mqtt_id"].as<String>());
-                if (doc["auth_user"].is<String>() && doc["auth_user"].as<String>() != "***") _deps.preferences->putString("auth_user", doc["auth_user"].as<String>());
-                if (doc["auth_pass"].is<String>() && doc["auth_pass"].as<String>() != "***") _deps.preferences->putString("auth_pass", doc["auth_pass"].as<String>());
-                // bk_ssid/bk_pass removed — POE board has no WiFi
-                if (doc["radar_res"].is<float>()) _deps.preferences->putFloat("radar_res", doc["radar_res"].as<float>());
-                if (doc["led_start"].is<uint16_t>()) _deps.preferences->putUInt("led_start", doc["led_start"].as<uint16_t>());
+                auto& cfg = *_deps.config;
+                if (doc["mqtt_server"].is<String>()) doc["mqtt_server"].as<String>().toCharArray(cfg.mqtt_server, sizeof(cfg.mqtt_server));
+                if (doc["mqtt_port"].is<String>()) doc["mqtt_port"].as<String>().toCharArray(cfg.mqtt_port, sizeof(cfg.mqtt_port));
+                if (doc["mqtt_user"].is<String>() && doc["mqtt_user"].as<String>() != "***") doc["mqtt_user"].as<String>().toCharArray(cfg.mqtt_user, sizeof(cfg.mqtt_user));
+                if (doc["mqtt_pass"].is<String>() && doc["mqtt_pass"].as<String>() != "***") doc["mqtt_pass"].as<String>().toCharArray(cfg.mqtt_pass, sizeof(cfg.mqtt_pass));
+                if (doc["mqtt_id"].is<String>()) doc["mqtt_id"].as<String>().toCharArray(cfg.mqtt_id, sizeof(cfg.mqtt_id));
+                if (doc["auth_user"].is<String>() && doc["auth_user"].as<String>() != "***") doc["auth_user"].as<String>().toCharArray(cfg.auth_user, sizeof(cfg.auth_user));
+                if (doc["auth_pass"].is<String>() && doc["auth_pass"].as<String>() != "***") doc["auth_pass"].as<String>().toCharArray(cfg.auth_pass, sizeof(cfg.auth_pass));
+                // bk_ssid/bk_pass omitted — POE board has no WiFi
+                if (doc["radar_res"].is<float>()) cfg.radar_resolution = doc["radar_res"].as<float>();
+                if (doc["led_start"].is<uint16_t>()) cfg.startup_led_sec = doc["led_start"].as<uint16_t>();
+                // POE-specific keys
+                if (doc["chip_temp_interval"].is<uint16_t>()) cfg.chip_temp_interval = doc["chip_temp_interval"].as<uint16_t>();
+                if (doc["static_ip"].is<String>()) doc["static_ip"].as<String>().toCharArray(cfg.static_ip, sizeof(cfg.static_ip));
+                if (doc["static_gw"].is<String>()) doc["static_gw"].as<String>().toCharArray(cfg.static_gw, sizeof(cfg.static_gw));
+                if (doc["static_mask"].is<String>()) doc["static_mask"].as<String>().toCharArray(cfg.static_mask, sizeof(cfg.static_mask));
+                if (doc["static_dns"].is<String>()) doc["static_dns"].as<String>().toCharArray(cfg.static_dns, sizeof(cfg.static_dns));
+                _deps.configManager->save();
                 if (doc["hold_time"].is<unsigned long>()) _deps.preferences->putULong("hold_time", doc["hold_time"].as<unsigned long>());
                 if (doc["zones"].is<String>()) _deps.preferences->putString("zones_json", doc["zones"].as<String>());
             }
@@ -909,6 +923,7 @@ void setupAlarmRoutes() {
         JsonDocument doc;
         doc["armed"] = _deps.securityMonitor->isArmed();
         doc["state"] = _deps.securityMonitor->getAlarmStateStr();
+        doc["home_mode"] = _deps.securityMonitor->isHomeMode();
         doc["entry_delay"] = _deps.securityMonitor->getEntryDelay() / 1000;
         doc["exit_delay"] = _deps.securityMonitor->getExitDelay() / 1000;
         doc["disarm_reminder"] = _deps.securityMonitor->isDisarmReminderEnabled();
@@ -919,9 +934,39 @@ void setupAlarmRoutes() {
 
     _deps.server->on("/api/alarm/arm", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!checkAuth(request)) return;
+        // Defaults from query params
         bool immediate = request->hasParam("immediate") && request->getParam("immediate")->value() == "1";
-        _deps.securityMonitor->setArmed(true, immediate);
-        request->send(200, "text/plain", immediate ? "Armed (immediate)" : "Arming...");
+        bool homeMode  = request->hasParam("home_mode") && request->getParam("home_mode")->value() == "1";
+        // Override with JSON body if present (body handler stored parsed flags in _tempObject)
+        char* bodyData = (char*)request->_tempObject;
+        if (bodyData && strlen(bodyData) > 0) {
+            JsonDocument doc;
+            if (deserializeJson(doc, bodyData) == DeserializationError::Ok) {
+                if (doc["immediate"].is<bool>()) immediate = doc["immediate"].as<bool>();
+                if (doc["home_mode"].is<bool>())  homeMode  = doc["home_mode"].as<bool>();
+            }
+            free(bodyData);
+            request->_tempObject = nullptr;
+        }
+        _deps.securityMonitor->setArmed(true, immediate, homeMode);
+        if (homeMode) {
+            request->send(200, "text/plain", immediate ? "Armed HOME (immediate)" : "Arming HOME...");
+        } else {
+            request->send(200, "text/plain", immediate ? "Armed AWAY (immediate)" : "Arming AWAY...");
+        }
+    }, NULL, [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        // Buffer optional JSON body: {"home_mode": true, "immediate": true}
+        if (!checkAuth(request)) return;
+        if (index == 0) {
+            if (total > 256) return;
+            request->_tempObject = malloc(total + 1);
+            if (request->_tempObject) ((char*)request->_tempObject)[0] = '\0';
+        }
+        char* buf = (char*)request->_tempObject;
+        if (buf) {
+            memcpy(buf + index, data, len);
+            buf[index + len] = '\0';
+        }
     });
 
     _deps.server->on("/api/alarm/disarm", HTTP_POST, [](AsyncWebServerRequest *request) {

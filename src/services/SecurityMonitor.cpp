@@ -105,7 +105,7 @@ void SecurityMonitor::update() {
     if (_mutex) xSemaphoreGive(_mutex);
 }
 
-void SecurityMonitor::setArmed(bool armed, bool immediate) {
+void SecurityMonitor::setArmed(bool armed, bool immediate, bool homeMode) {
     if (_mutex && xSemaphoreTake(_mutex, pdMS_TO_TICKS(500)) != pdTRUE) return;
     unsigned long now = millis();
     if (armed) {
@@ -115,21 +115,33 @@ void SecurityMonitor::setArmed(bool armed, bool immediate) {
             if (_mutex) xSemaphoreGive(_mutex);
             return;
         }
-        // Already arming/armed — idempotent, no-op
+        // Already arming/armed — idempotent, but allow upgrading the mode
         if (_alarmState == AlarmState::ARMING || _alarmState == AlarmState::ARMED) {
-            DBG("SecMon", "setArmed(true) ignored — already %s", getAlarmStateStr());
+            if (_homeMode != homeMode) {
+                _homeMode = homeMode;
+                DBG("SecMon", "setArmed(true) mode flip → %s", getAlarmStateStr());
+            } else {
+                DBG("SecMon", "setArmed(true) ignored — already %s", getAlarmStateStr());
+            }
+            if (_prefs) _prefs->putBool("sec_home_mode", _homeMode);
             if (_mutex) xSemaphoreGive(_mutex);
             return;
         }
+        _homeMode = homeMode;
         if (immediate) {
             _alarmState = AlarmState::ARMED;
-            DBG("SecMon", "ARMED (immediate)");
-            triggerAlert(NotificationType::ALARM_STATE_CHANGE, "🔒 System ARMED", "Immediate activation.");
+            DBG("SecMon", "ARMED (immediate, %s)", _homeMode ? "home" : "away");
+            triggerAlert(NotificationType::ALARM_STATE_CHANGE,
+                         _homeMode ? "🏠 System ARMED HOME" : "🔒 System ARMED",
+                         "Immediate activation.");
         } else {
             _alarmState = AlarmState::ARMING;
             _exitDelayStart = now;
-            DBG("SecMon", "ARMING (exit delay %lu s)", _exitDelay / 1000);
-            triggerAlert(NotificationType::ALARM_STATE_CHANGE, "⏳ ARMING...", "Exit delay: " + String(_exitDelay / 1000) + "s");
+            DBG("SecMon", "ARMING (%s, exit delay %lu s)",
+                _homeMode ? "home" : "away", _exitDelay / 1000);
+            triggerAlert(NotificationType::ALARM_STATE_CHANGE,
+                         _homeMode ? "⏳ ARMING HOME..." : "⏳ ARMING...",
+                         "Exit delay: " + String(_exitDelay / 1000) + "s");
         }
         clearApproachLog();
         _armedDebounceCount = 0;
@@ -141,6 +153,7 @@ void SecurityMonitor::setArmed(bool armed, bool immediate) {
         // FIX #1: Always deactivate siren on disarm (covers TRIGGERED + any corrupted state)
         deactivateSiren();
         _alarmState = AlarmState::DISARMED;
+        _homeMode = false;
         _entryDelayStart = 0;
         _exitDelayStart = 0;
         _lastPresenceWhileDisarmed = 0;
@@ -160,6 +173,7 @@ void SecurityMonitor::setArmed(bool armed, bool immediate) {
     // Persist
     if (_prefs) {
         _prefs->putBool("sec_armed", armed);
+        _prefs->putBool("sec_home_mode", _homeMode);
     }
     if (_mutex) xSemaphoreGive(_mutex);
 }
@@ -168,7 +182,7 @@ const char* SecurityMonitor::getAlarmStateStr() const {
     switch (_alarmState) {
         case AlarmState::DISARMED:  return "disarmed";
         case AlarmState::ARMING:    return "arming";
-        case AlarmState::ARMED:     return "armed_away";
+        case AlarmState::ARMED:     return _homeMode ? "armed_home" : "armed_away";
         case AlarmState::PENDING:   return "pending";
         case AlarmState::TRIGGERED: return "triggered";
         default: return "disarmed";

@@ -91,8 +91,9 @@ public:
     void setPetImmunity(uint8_t energy) { _petImmunityThreshold = energy; }
 
     // Armed/Disarmed
-    void setArmed(bool armed, bool immediate = false);
+    void setArmed(bool armed, bool immediate = false, bool homeMode = false);
     bool isArmed() const { return _alarmState == AlarmState::ARMED || _alarmState == AlarmState::ARMING || _alarmState == AlarmState::PENDING || _alarmState == AlarmState::TRIGGERED; }
+    bool isHomeMode() const { return _homeMode; }
     AlarmState getAlarmState() const { return _alarmState; }
     const char* getAlarmStateStr() const;
     void setEntryDelay(unsigned long ms) { _entryDelay = ms; }
@@ -179,6 +180,7 @@ private:
 
     // Armed/Disarmed state
     AlarmState _alarmState = AlarmState::DISARMED;
+    bool _homeMode = false;            // ARMED → reported as armed_home when true, armed_away otherwise
     unsigned long _entryDelay = 30000;
     unsigned long _exitDelay = 30000;
     unsigned long _exitDelayStart = 0;

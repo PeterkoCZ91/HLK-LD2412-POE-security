@@ -396,6 +396,14 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div id="ota_bar" style="height:5px; background:#333; margin-top:5px; width:0%; transition:width 0.2s; background:var(--accent)"></div>
         <button onclick="uploadFW()">Upload Firmware</button>
     </div>
+
+    <!-- Config Backup -->
+    <div class="card">
+        <div class="stat-row"><span>Config Backup</span></div>
+        <button class="sec" onclick="exportConfig()">Export Config (JSON)</button>
+        <input type="file" id="import_file" accept=".json" style="margin-top:8px">
+        <button onclick="importConfig()" style="margin-top:5px">Import Config &amp; Reboot</button>
+    </div>
   </div>
 
   <div id="toast">Saved</div>
@@ -1046,6 +1054,36 @@ function saveAuth() {
         if(r.ok) { showToast("Password changed"); alert("Credentials changed. Device will restart."); }
         else r.text().then(t => showToast(t || "Error"));
     });
+}
+
+function exportConfig() {
+    fetch('/api/config/export').then(r => {
+        if (!r.ok) { showToast("Export failed"); return; }
+        return r.json();
+    }).then(d => {
+        if (!d) return;
+        const blob = new Blob([JSON.stringify(d, null, 2)], {type: 'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'poe2412_config.json';
+        a.click();
+        showToast("Config exported");
+    });
+}
+
+function importConfig() {
+    const file = $('import_file').files[0];
+    if (!file) { showToast("Select a JSON file first"); return; }
+    if (!confirm('Import config and reboot?')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        fetch('/api/config/import', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: e.target.result
+        }).then(r => r.text()).then(t => showToast(t));
+    };
+    reader.readAsText(file);
 }
 
 window.onload = init;
