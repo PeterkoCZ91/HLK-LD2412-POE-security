@@ -9,6 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - **Bilingual CZ/EN web UI** — full i18n engine (95 keys) with localStorage persistence, language toggle button, default EN. POE-specific strings: chip temp, ETH link/IP/speed, static IP configuration.
 - **HomeMode** — `arm_home` / `arm_away` distinction in SecurityMonitor; `setArmed()` accepts `homeMode` param; state persists in NVS (`sec_home_mode`); MQTT HA discovery now includes `arm_home` in `sup_feat`; `ARM_HOME` MQTT command supported.
 - **Config export/import** — `/api/config/export` and `/api/config/import` endpoints; GUI Export/Import buttons in System tab. Export includes POE-specific keys (chip_temp_interval, static IP). Import fixed to write to config struct + call save() (prior: wrote only to Preferences, values stale in RAM until reboot).
+- **Zone entry path validation** — each zone can require a specific previous zone (`prev_zone` field). Wrong approach path (e.g. window instead of door) overrides entry delay to immediate trigger.
 - CI workflow with PlatformIO cache; release workflow building merged flashable binary on tag push.
 - Community files: CONTRIBUTING.md, SECURITY.md, .editorconfig, issue templates, PR template, docs/flashing.md.
 

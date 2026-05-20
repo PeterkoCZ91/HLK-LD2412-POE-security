@@ -391,6 +391,7 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
     }
 
     if (newZoneName != _currentZoneName) {
+        _prevZoneName = _currentZoneName;
         _currentZoneName = newZoneName;
         _currentZoneIndex = newZoneIndex;
         _zoneEnterTime = now;
@@ -451,6 +452,18 @@ void SecurityMonitor::processRadarData(uint16_t distance, uint8_t move_energy, u
         uint8_t behavior = 0; // default = entry delay
         if (_currentZoneIndex >= 0 && (size_t)_currentZoneIndex < _zones.size()) {
             behavior = _zones[_currentZoneIndex].alarm_behavior;
+        }
+
+        // Zone entry path validation: if zone requires a specific previous zone, override to immediate
+        if (_currentZoneIndex >= 0 && (size_t)_currentZoneIndex < _zones.size()) {
+            const char* reqPrev = _zones[_currentZoneIndex].valid_prev_zone;
+            if (reqPrev[0] != '\0' && behavior == 0) {
+                if (_prevZoneName != String(reqPrev)) {
+                    DBG("SecMon", "INVALID PATH: zone '%s' req prev '%s' but got '%s' → immediate",
+                        _currentZoneName.c_str(), reqPrev, _prevZoneName.c_str());
+                    behavior = 1;
+                }
+            }
         }
 
         if (behavior == 2) {

@@ -572,10 +572,10 @@ The PoE variant monitors ESP32 chip temperature. If you receive temperature aler
 |---------|--------|-------------|
 | Multi-sensor mesh | :white_check_mark: v4.2.0 | Nodes cross-verify alarms via MQTT. On trigger, peers confirm presence within 5s. Alarm event includes `mesh_verified` field |
 | Supervision heartbeat | :white_check_mark: v4.2.0 | Nodes publish alive signal every 60s. If a peer goes silent for 3 min, tamper alert is sent. Auto-discovery of up to 8 peers |
-| Entry/exit path logic | :bulb: Planned | Define valid entry paths (door → hallway → room). Entry delay only on correct sequence; wrong path (e.g. window) = immediate trigger |
+| Entry/exit path logic | :white_check_mark: v4.3.0 | Define valid entry paths (door → hallway → room). Entry delay only on correct sequence; wrong path (e.g. window) = immediate trigger |
+| Static IP via web UI | :white_check_mark: v4.1.0 | Configure static IP via Settings tab — no reflashing needed |
 | Event timeline UI | :bulb: Planned | Visual timeline in web dashboard replacing the table view — easier forensic review of detection events |
 | Camera trigger | :bulb: Planned | Snapshot IP camera on alarm event via MQTT/HTTP |
-| Static IP via web UI | :bulb: Planned | Configure static IP without reflashing |
 | WiFi variant sync | :arrows_counterclockwise: Ongoing | Port new features from WiFi v3.x to PoE v4.x |
 | ESP32Async libraries | :white_check_mark: Done | Replaced abandoned me-no-dev/* with community ESP32Async/* (v4.1.3) |
 | Chip temp monitoring | :white_check_mark: Done | Warning/critical alerts via MQTT + Telegram (v4.0.2) |

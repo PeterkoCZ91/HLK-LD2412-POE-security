@@ -301,6 +301,9 @@ void updateZonesFromJSON() {
         z.delay_ms = obj["delay"] | 0;
         z.enabled = obj["enabled"] | true;
         z.alarm_behavior = obj["alarm_behavior"] | 0;
+        String prevZone = obj["prev_zone"] | "";
+        strncpy(z.valid_prev_zone, prevZone.c_str(), sizeof(z.valid_prev_zone)-1);
+        z.valid_prev_zone[sizeof(z.valid_prev_zone)-1] = '\0';
         zones.push_back(z);
     }
     securityMonitor.setZones(zones);

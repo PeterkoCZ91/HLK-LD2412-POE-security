@@ -50,6 +50,7 @@ struct AlertZone {
     uint16_t delay_ms;
     bool enabled;
     char name[16];
+    char valid_prev_zone[16]; // Entry path: required previous zone name ("" = any path allowed)
 };
 
 enum class ZoneState {
@@ -245,6 +246,7 @@ private:
     // Zones
     std::vector<AlertZone> _zones;
     String _currentZoneName = "none";
+    String _prevZoneName = "none";
     int _currentZoneIndex = -1;
     unsigned long _zoneEnterTime = 0;
     bool _zoneAlertTriggered = false;
