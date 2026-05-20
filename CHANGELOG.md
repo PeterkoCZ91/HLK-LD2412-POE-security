@@ -3,6 +3,15 @@
 All notable changes to the POE-2412 Security System firmware are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [v4.3.0-poe] - 2026-05-20
+
+### Added
+- **Bilingual CZ/EN web UI** — full i18n engine (95 keys) with localStorage persistence, language toggle button, default EN. POE-specific strings: chip temp, ETH link/IP/speed, static IP configuration.
+- **HomeMode** — `arm_home` / `arm_away` distinction in SecurityMonitor; `setArmed()` accepts `homeMode` param; state persists in NVS (`sec_home_mode`); MQTT HA discovery now includes `arm_home` in `sup_feat`; `ARM_HOME` MQTT command supported.
+- **Config export/import** — `/api/config/export` and `/api/config/import` endpoints; GUI Export/Import buttons in System tab. Export includes POE-specific keys (chip_temp_interval, static IP). Import fixed to write to config struct + call save() (prior: wrote only to Preferences, values stale in RAM until reboot).
+- CI workflow with PlatformIO cache; release workflow building merged flashable binary on tag push.
+- Community files: CONTRIBUTING.md, SECURITY.md, .editorconfig, issue templates, PR template, docs/flashing.md.
+
 ## [v4.2.0-poe] - 2026-04-13
 ### Added
 - **Supervision heartbeat**: Nodes publish alive signal every 60s via MQTT (`security/<id>/supervision/alive`). If a peer goes silent for 3 minutes, a tamper alert is sent (Telegram/Discord/MQTT). Auto-discovery of up to 8 peers, zero configuration required.

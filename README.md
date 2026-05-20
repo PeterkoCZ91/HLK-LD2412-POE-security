@@ -1,14 +1,15 @@
 # :shield: POE-2412 Security :electric_plug:
 
+[![CI](https://github.com/PeterkoCZ91/HLK-LD2412-POE-security/actions/workflows/ci.yml/badge.svg)](https://github.com/PeterkoCZ91/HLK-LD2412-POE-security/actions/workflows/ci.yml)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-ESP32-orange?logo=platformio)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/MCU-ESP32--WROOM--32-blue?logo=espressif)](https://www.espressif.com/)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.1.3--poe-blue)]()
+[![Version](https://img.shields.io/badge/Version-4.3.0--poe-blue)]()
 
 **Ethernet (PoE) variant** of [HLK-LD2412-security](https://github.com/PeterkoCZ91/HLK-LD2412-security) — standalone intrusion detection system built on ESP32 + HLK-LD2412 24 GHz mmWave radar over **wired Ethernet with Power over Ethernet**. Full alarm state machine, zone management, Home Assistant integration, Telegram bot, and a dark-mode web dashboard. No cloud, no WiFi — one cable for power and data.
 
 > [!TIP]
-> **New in v4.1** -- Scheduled arm/disarm, auto-arm after idle, chip temperature monitoring, heap watchdog, and HTTP stability fix (ESP32Async fork).
+> **New in v4.3** -- Bilingual CZ/EN web UI, HomeMode (arm_home/arm_away) for HA alarm panel, config export/import with GUI. See [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -100,10 +101,14 @@ All features from the [WiFi variant](https://github.com/PeterkoCZ91/HLK-LD2412-s
 
 **~10 minutes from clone to working alarm.**
 
+**Don't want to build from source?** Download the pre-built binary from the [**Releases page**](../../releases/latest) and follow the [**Flashing Guide**](docs/flashing.md) — no PlatformIO needed.
+
+**Building from source:**
+
 ```bash
 # 1. Clone
-git clone https://github.com/PeterkoCZ91/POE-2412-security.git
-cd POE-2412-security
+git clone https://github.com/PeterkoCZ91/HLK-LD2412-POE-security.git
+cd HLK-LD2412-POE-security
 
 # 2. Edit include/secrets.h — set your MQTT broker IP
 #    (Telegram is optional — leave defaults to skip)
