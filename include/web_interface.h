@@ -1114,13 +1114,20 @@ function renderZones() {
                 <input type="checkbox" id="z_en_${i}" ${z.enabled!==false?'checked':''} style="width:auto">
                 <button onclick="delZone(${i})" class="warn" style="width:auto; margin:0; padding:5px 10px">×</button>
             </div>
+            <div style="display:flex; gap:5px; align-items:center">
+                <span style="color:#888; font-size:0.75rem; white-space:nowrap">${t('zone_path_label')}</span>
+                <select id="z_pz_${i}" style="flex:2" title="${t('zone_path_title')}">
+                    <option value="" ${!z.prev_zone?'selected':''}>${t('zone_path_any')}</option>
+                    ${zones.map((oz,j) => j!==i ? '<option value="'+oz.name+'" '+(z.prev_zone===oz.name?'selected':'')+'>'+oz.name+'</option>' : '').join('')}
+                </select>
+            </div>
         </div>`;
     });
     $('zones_list').innerHTML = h;
     drawZoneMap();
 }
 function addZone() {
-    zones.push({name: t('zone_default') + " " + (zones.length+1), min: 0, max: 100, level: 0, alarm_behavior: 0, delay: 0, enabled: true});
+    zones.push({name: t('zone_default') + " " + (zones.length+1), min: 0, max: 100, level: 0, alarm_behavior: 0, delay: 0, enabled: true, prev_zone: ""});
     renderZones();
 }
 function delZone(i) {
@@ -1137,7 +1144,8 @@ function saveZones() {
             level: parseInt(document.getElementById(`z_lvl_${i}`).value),
             alarm_behavior: parseInt(document.getElementById(`z_ab_${i}`).value),
             delay: parseInt(document.getElementById(`z_del_${i}`).value),
-            enabled: document.getElementById(`z_en_${i}`).checked
+            enabled: document.getElementById(`z_en_${i}`).checked,
+            prev_zone: document.getElementById(`z_pz_${i}`).value
         });
     });
     zones = newZones;
